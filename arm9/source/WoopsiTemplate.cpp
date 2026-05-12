@@ -24,6 +24,7 @@
 #include "timerTGDS.h"
 #include "powerTGDS.h"
 #include "debugNocash.h"
+#include "loader.h"
 
 #if (defined(__GNUC__) && !defined(__clang__))
 __attribute__((optimize("O0")))
@@ -104,7 +105,7 @@ void WoopsiTemplate::startup(int argc, char **argv){
 	controlWindow->addGadget(_nextFile);
 	_nextFile->addGadgetEventHandler(this);
 	
-	_play = new Button(rect.x + 41 + 41 + 41, rect.y, 80, 16, "Exit");
+	_play = new Button(rect.x + 41 + 41 + 41, rect.y, 80, 16, "Run TGDS-MB");
 	_play->setRefcon(4);
 	controlWindow->addGadget(_play);
 	_play->addGadgetEventHandler(this);
@@ -295,7 +296,7 @@ void WoopsiTemplate::handleClickEvent(const GadgetEventArgs& e)   {
 			WoopsiTemplateProc->_MultiLineTextBoxLogger->appendText(":");
 			WoopsiTemplateProc->_MultiLineTextBoxLogger->appendText("\n");
 			
-			WoopsiTemplateProc->_MultiLineTextBoxLogger->appendText("Are you sure you want to Exit?\n(A) No\n(B) Yes");
+			WoopsiTemplateProc->_MultiLineTextBoxLogger->appendText("Are you sure you want to run TGDS-Multiboot?\n(A) No\n(B) Yes");
 			bool pressedB = false;
 			while(1==1){
 				scanKeys();
@@ -314,11 +315,29 @@ void WoopsiTemplate::handleClickEvent(const GadgetEventArgs& e)   {
 			
 			
 			if(pressedB == true){
-				printMessage("TGDSProject2d has been closed correctly. Turning off the hardware now.");
-				shutdownNDSHardware();
-				while(1==1){
-					bool waitForVblank = false;
-					int threadsRan = runThreads(internalTGDSThreads, waitForVblank);			
+				
+				char * TGDS_CHAINLOADEXEC = NULL;
+				if(__dsimode == true){
+					TGDS_CHAINLOADEXEC = "0:/ToolchainGenericDS-multiboot.srl";
+				}
+				else{
+					TGDS_CHAINLOADEXEC = "0:/ToolchainGenericDS-multiboot.nds";
+				}
+				char thisArgv[4][MAX_TGDSFILENAME_LENGTH];
+				memset(thisArgv, 0, sizeof(thisArgv));
+				strcpy(&thisArgv[0][0], "");	//Arg0:	This Binary loaded
+				strcpy(&thisArgv[1][0], "");	//Arg1:	NDS Binary to chainload through TGDS-MB
+				strcpy(&thisArgv[2][0], "");	//Arg2: NDS Binary loaded from TGDS-MB	
+				u32 * payload = getTGDSMBV3ARM7Bootloader();
+				
+				bool isTGDSTWLHomebrew = false;
+				if(isNTROrTWLBinary(TGDS_CHAINLOADEXEC, &isTGDSTWLHomebrew) != notTWLOrNTRBinary){				
+					if(TGDSMultibootRunNDSPayload(TGDS_CHAINLOADEXEC, (u8*)payload, 0, (char*)&thisArgv) == false){ //should never reach here, nor even return true. Should fail it returns false
+						while(1==1){
+							bool waitForVblank = false;
+							int threadsRan = runThreads(internalTGDSThreads, waitForVblank);			
+						}
+					}
 				}
 			}
 		}	
