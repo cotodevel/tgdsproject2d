@@ -47,6 +47,20 @@ USA
 __attribute__((section(".dtcm")))
 struct task_Context * internalTGDSThreads = NULL;
 
+//TGDS-MB ARM7 Bootldr
+#include "arm7bootldr.h"
+#include "arm7bootldr_twl.h"
+
+u32 * getTGDSMBV3ARM7Bootloader(){	//Required by ToolchainGenericDS-multiboot v3
+	if(__dsimode == false){
+		swiDecompressLZSSWram((u8*)&arm7bootldr[0], (u8*)TGDS_MB_V3_ARM7_SCRATCHPAD_LZSS_DECOMP_BUF);	
+	}
+	else{
+		swiDecompressLZSSWram((u8*)&arm7bootldr_twl[0], (u8*)TGDS_MB_V3_ARM7_SCRATCHPAD_LZSS_DECOMP_BUF);
+	}
+	return (u32*)TGDS_MB_V3_ARM7_SCRATCHPAD_LZSS_DECOMP_BUF;
+}
+
 //TGDS Soundstreaming API
 int internalCodecType = SRC_NONE; //Returns current sound stream format: WAV, ADPCM or NONE
 struct fd * _FileHandleVideo = NULL; 
@@ -76,7 +90,7 @@ static inline void menuShow(){
 	clrscr();
 	printf("     ");
 	printf("     ");
-	printf("toolchaingenericds-foobilliard: ");
+	printf("%s:", TGDSPROJECTNAME);
 	printf("(Select): This menu. ");
 	printf("(Start): FileBrowser : (A) Play WAV/IMA-ADPCM (Intel) strm ");
 	printf("(D-PAD:UP/DOWN): Volume + / - ");
@@ -109,30 +123,43 @@ __attribute__ ((optnone))
 #endif
 int main(int argc, char **argv)   {
 	/*			TGDS 1.6 Standard ARM9 Init code start (custom VRAM + Woopsi SDK)	*/
+	
+	setupDisabledExceptionHandler();
+	
+	//Save Stage 1: IWRAM ARM7 payload: NTR/TWL (0x03800000)
+	memcpy((void *)TGDS_MB_V3_ARM7_STAGE1_ADDR, (const void *)0x02380000, (int)(96*1024));	//
+	coherent_user_range_by_size((uint32)TGDS_MB_V3_ARM7_STAGE1_ADDR, (int)(96*1024)); //		also for TWL binaries 
+	
+	//Execute Stage 2: VRAM ARM7 payload: NTR/TWL (0x06000000)
+	u32 * payload = getTGDSMBV3ARM7Bootloader();
+	executeARM7Payload((u32)0x02380000, 96*1024, payload);
+	
 	bool isTGDSCustomConsole = false;	//set default console or custom console: custom console
 	GUI_init(isTGDSCustomConsole);
 	GUI_clear();
 
 	bool isCustomTGDSMalloc = true;
 	setTGDSMemoryAllocator(getProjectSpecificMemoryAllocatorSetup(isCustomTGDSMalloc));
-	
-	int ret=FS_init();
-	if (ret == 0)
-	{
-		
-	}
-	else{
-		
-	}
-	
+	sint32 fwlanguage = (sint32)getLanguage();
+
 	asm("mcr	p15, 0, r0, c7, c10, 4");
 	flush_icache_all();
 	flush_dcache_all();
 	internalTGDSThreads = getTGDSThreadSystem();
+
+	printf("   ");
+	printf("   ");
+
+	int ret=FS_init();
+	if (ret != 0){
+		printf("%s: FS Init error: %d >%d", TGDSPROJECTNAME, ret, TGDSPrintfColor_Red);
+		while(1==1){
+			swiDelay(1);
+		}
+	}
 	/*			TGDS 1.6 Standard ARM9 Init code end (custom VRAM + Woopsi SDK)	*/
 	
 	REG_IME = 0;
-	setupDisabledExceptionHandler();
 	set0xFFFF0000FastMPUSettings();
 	//TGDS-Projects -> legacy NTR TSC compatibility
 	if(__dsimode == true){
@@ -140,26 +167,18 @@ int main(int argc, char **argv)   {
 	}
 	REG_IME = 1;
 	
-	int taskATimeMS = 1; //Task execution requires at least 1ms: Timeout led backlight.
+	int taskATimeMS = 10; //Task execution requires at least 1ms: Timeout led backlight.
 	if(registerThread(internalTGDSThreads, (TaskFn)&taskA, (u32*)NULL, taskATimeMS, (TaskFn)&onThreadOverflowUserCode, tUnitsMilliseconds) != THREAD_OVERFLOW){
         
     }
 
 	powerOFF3DEngine(); //Power off ARM9 3D Engine to save power
-	setBacklight(POWMAN_BACKLIGHT_BOTTOM_BIT);
 	bottomScreenIsLit = true;
 
 	// Create Woopsi UI
 	WoopsiTemplate WoopsiTemplateApp;
 	WoopsiTemplateProc = &WoopsiTemplateApp;
-	WoopsiTemplateApp.main(argc, argv);
-	
-	while(1) {
-		bool waitForVblank = false;
-		int threadsRan = runThreads(internalTGDSThreads, waitForVblank);
-	}
-	
-	return 0;
+	return WoopsiTemplateApp.main(argc, argv);
 }
 
 #if (defined(__GNUC__) && !defined(__clang__))

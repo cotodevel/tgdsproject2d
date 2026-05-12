@@ -34,6 +34,7 @@ USA
 extern "C" {
 #endif
 
+extern u32 * getTGDSMBV3ARM7Bootloader(); //Required by ToolchainGenericDS-multiboot v3
 extern int main(int argc, char **argv);
 extern void ApplicationMainLoop();
 
