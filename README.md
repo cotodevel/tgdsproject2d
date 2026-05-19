@@ -67,7 +67,7 @@ Note:
 - Preferably, use toolchaingenericds-multiboot and load snakeGL from there. It's guaranteed to work.
 
 Latest stable release:
-https://bitbucket.org/Coto88/tgdsproject2d/get/TGDS1.65.zip
+http://github.com/cotodevel/tgdsproject2d/archive/TGDS1.65.zip
 
 OST: -Ron Jarzombek - She Blotted Me With Science
 
